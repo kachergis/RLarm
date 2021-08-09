@@ -1,0 +1,125 @@
+---
+title: "Understanding RL Agent Behavior"
+author: "Roy, Deniz, George"
+date: "8/9/2021"
+output: html_document
+---
+
+## Load packages
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+#library(Rmi::Pairedsc)
+require(scales) # to access break formatting functions
+library(ggsci)
+library(ez)
+library(ggpubr)
+library("RColorBrewer")
+library(showtext)
+library(paletteer)
+require(dplyr)
+require(tidyr)
+require(kableExtra)
+require(GGally)
+
+#display.brewer.all()
+#paletteer_d(palette = "RColorBrewer::Paired")
+#paletteer_d(palette = "RColorBrewer::RdYlBu")
+#font_add("ssPro", "/Users/rdekleijn/Library/Fonts/SourceSansPro-Regular.otf")
+showtext_auto()
+
+scientific_10 <- function(x) {   parse(text=gsub("e\\+*", " %*% 10^", scales::scientific_format()(x))) }
+
+ff = function(x, patterns, replacements = patterns, fill = NA, ...) {
+  stopifnot(length(patterns) == length(replacements))
+  ans = rep_len(as.character(fill), length(x))    
+  empty = seq_along(x)
+  for(i in seq_along(patterns)) {
+    greps = grepl(patterns[[i]], x[empty], ...)
+    ans[empty[greps]] = replacements[[i]]  
+    empty = empty[!greps]
+  }
+  return(ans)
+}
+```
+
+## Preprocess data
+
+```{r load-data}
+full_df <- read.csv('reply_editor_ppo.csv') # Initialize df with column names
+full_df$condition <- ff(full_df$file, c("-curr-", "curr8K", "2M", "curr_rev", "200K", "nocur"), c("400K", "800K", "2M", "0", "200K", "never"), NA, ignore.case = TRUE)
+full_df$condition <- factor(full_df$condition, levels = c("0", "200K", "400K", "800K", "2M", "never"))
+
+wide_df <- full_df %>% 
+  pivot_wider(names_from = metric, values_from = value) 
+```
+
+## Reward over training
+
+Clear decrements to reward after onset of the movement penalty (sensible).
+Note that with immediate-onset penalty (condition=0), some agents perform badly (although they all start the same? is this actually onset = 1?), while others start to approach 0, and a third group does even better (coming close to no movement penalty performance, a good ceiling).
+What are these three distinct strategies?
+
+```{r}
+wide_df %>% ggplot(aes(x=step, y=`Environment/Cumulative Reward`, color=condition)) + 
+  geom_point(alpha=.3) + 
+  geom_line(aes(group=file), alpha=.3) +
+  theme_classic()
+```
+
+### Final performance
+
+Mean performance after 
+
+```{r}
+wide_df %>% filter(step > 2000000) %>%
+  group_by(condition) %>%
+  summarise(`Mean Reward` = mean(`Environment/Cumulative Reward`), 
+            `Mean distance moved` = mean(`Distance moved`), 
+            `Mean RT` = mean(RT, na.rm=T), 
+            `Mean distance to base` = mean(`Distance to base`),
+            `sd(Reward)` = sd(`Environment/Cumulative Reward`),
+            `sd(Distance moved)` = sd(`Distance moved`),
+            `sd(RT)` = sd(RT, na.rm=T),
+            `sd(Distance to base)` = sd(`Distance to base`)) %>%
+  #arrange(desc(`Mean Reward`)) %>%
+  kable(digits = 2, format = "html", table.attr = "style='width:80%;'")
+```
+
+No movement penalty achieves the best average reward (of course), but also moves the most, stays the farthest from the base, and has moderately slow RTs.
+Of the movement-penalized conditions, 400K and 800K onset show the highest rewards, along with little movement, fast RTs, and stay fairly close to the base.
+200K and 2M show long RTs and more distance moved than 400K / 800K onsets.
+
+Note that there are `r sum(is.na(wide_df$RT))` NA values in RT, all but 1 of which are from the 0-onset penalty condition (the group of agents that never move, and thus never reach a target? we should mention the proportion of agents adopting this strategy.)
+
+
+## Relations between reward and main variables
+
+
+```{r plots, echo=FALSE, warning=F, fig.width=10, fig.height=4}
+p1 <- wide_df %>% filter(step > 2000000) %>%
+  ggplot(aes(x=RT, y=`Environment/Cumulative Reward`, color=`condition`)) + 
+  geom_point(alpha=.4) + theme_classic()
+
+p2 <- wide_df %>% filter(step > 2000000) %>%
+  ggplot(aes(x=`Distance moved`, y=`Environment/Cumulative Reward`, color=`condition`)) + 
+  geom_point(alpha=.4) + theme_classic()
+
+p3 <- wide_df %>% filter(step > 2000000) %>%
+  ggplot(aes(x=`Distance to base`, y=`Environment/Cumulative Reward`, color=`condition`)) + 
+  geom_point(alpha=.4) + theme_classic()
+
+ggarrange(p1, p2, p3, nrow=1, common.legend = T)
+```
+
+## Scatterplot Matrix
+
+```{r, fig.width=10, fig.height=10, warning=F}
+wide_df %>%
+  filter(step>2000000) %>%
+  ggpairs(columns=c("Environment/Cumulative Reward", "Distance moved", "RT",
+                      "Distance to base"), # "Policy/Learning Rate", "Losses/Policy Loss"
+        ggplot2::aes(colour=condition, alpha=.3)) + theme_bw()
+```
+

@@ -1,0 +1,5 @@
+"0","wide_df %>%"
+"0","  filter(step>2000000) %>%"
+"0","  ggpairs(columns=c(""Environment/Cumulative Reward"", ""Distance moved"", ""RT"","
+"0","                      ""Distance to base""), # ""Policy/Learning Rate"", ""Losses/Policy Loss"""
+"0","        ggplot2::aes(colour=condition, alpha=.3)) + theme_bw()"

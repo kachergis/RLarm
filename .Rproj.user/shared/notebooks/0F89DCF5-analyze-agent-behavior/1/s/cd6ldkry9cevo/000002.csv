@@ -1,0 +1,4 @@
+"0","wide_df %>% ggplot(aes(x=step, y=`Environment/Cumulative Reward`, color=condition)) + "
+"0","  geom_point(alpha=.3) + "
+"0","  geom_line(aes(group=file), alpha=.3) +"
+"0","  theme_classic()"
